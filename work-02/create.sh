@@ -8,10 +8,11 @@ CIDR_A=10.15.1.0/24
 CIDR_B=10.15.2.0/24
 APP_PORT=8015
 GREETING=vmlab
-VM_COUNT=2
-DISK_SIZE=10
 BOOT_SIZE=20
 IMAGE_FAMILY=ubuntu-2404-lts
+# ---- аргументы: число машин и размер диска, по умолчанию из варианта ----
+VM_COUNT="${1:-2}"
+DISK_SIZE="${2:-10}"
 
 echo "==> сеть и подсети"
 yc vpc network create --name "$PREFIX-net"
@@ -26,11 +27,19 @@ export APP_PORT GREETING SSH_KEY
 envsubst '${APP_PORT} ${GREETING} ${SSH_KEY}' \
   < work-02/cloud-init.tpl.yaml > work-02/cloud-init.yaml
 
+echo "==> дополнительный диск"
+yc compute disk create --name "$PREFIX-data" --zone "$ZONE_A" \
+  --size "$DISK_SIZE" --type network-hdd
+
 echo "==> машины"
 ZONES=("$ZONE_A" "$ZONE_B")
 SUBNETS=("$PREFIX-subnet-a" "$PREFIX-subnet-b")
 for i in $(seq 1 "$VM_COUNT"); do
   idx=$(( (i - 1) % 2 ))
+  ATTACH=()
+  if [ "$i" -eq 1 ]; then
+    ATTACH=(--attach-disk disk-name="$PREFIX-data",device-name=data)
+  fi
   yc compute instance create \
     --name "$PREFIX-app-$i" \
     --zone "${ZONES[$idx]}" \
@@ -40,16 +49,9 @@ for i in $(seq 1 "$VM_COUNT"); do
     --create-boot-disk image-folder-id=standard-images,image-family="$IMAGE_FAMILY",type=network-hdd,size="$BOOT_SIZE" \
     --network-interface subnet-name="${SUBNETS[$idx]}",nat-ip-version=ipv4 \
     --hostname "$PREFIX-app-$i" \
-    --metadata-from-file user-data=work-02/cloud-init.yaml
+    --metadata-from-file user-data=work-02/cloud-init.yaml \
+    "${ATTACH[@]}"
 done
-
-echo "==> дополнительный диск"
-yc compute disk create --name "$PREFIX-data" --zone "$ZONE_A" \
-  --size "$DISK_SIZE" --type network-hdd
-yc compute instance attach-disk "$PREFIX-app-1" \
-  --disk-name "$PREFIX-data" \
-  --device-name data \
-  --auto-delete=false
 
 echo "==> целевая группа"
 TARGETS=""

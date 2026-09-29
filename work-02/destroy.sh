@@ -1,13 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 PREFIX=poeluev-05
-VM_COUNT=2
-yc load-balancer network-load-balancer delete "$PREFIX-lb"
-yc load-balancer target-group delete "$PREFIX-tg"
-for i in $(seq 1 "$VM_COUNT"); do
-  yc compute instance delete "$PREFIX-app-$i"
+
+# удалить ресурс, только если он есть: $1 — команда yc, $2 — имя
+del() {
+  if yc $1 get "$2" >/dev/null 2>&1; then
+    echo "удаляю: $2"
+    yc $1 delete "$2"
+  else
+    echo "пропуск (нет): $2"
+  fi
+}
+
+del "load-balancer network-load-balancer" "$PREFIX-lb"
+del "load-balancer target-group" "$PREFIX-tg"
+for name in $(yc compute instance list --format json \
+    | jq -r --arg p "$PREFIX-app-" '.[].name | select(startswith($p))'); do
+  del "compute instance" "$name"
 done
-yc compute disk delete "$PREFIX-data"
-yc vpc subnet delete "$PREFIX-subnet-a"
-yc vpc subnet delete "$PREFIX-subnet-b"
-yc vpc network delete "$PREFIX-net"
+del "compute disk" "$PREFIX-data"
+del "vpc subnet" "$PREFIX-subnet-a"
+del "vpc subnet" "$PREFIX-subnet-b"
+del "vpc network" "$PREFIX-net"
