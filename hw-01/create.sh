@@ -150,7 +150,8 @@ fi
 
 # --- ждём готовности: пока check.sh не пройдёт (до 7,5 минут) ---
 log "жду готовности стенда..."
-for _ in $(seq 1 90); do
+END=$((SECONDS + 420))
+while [ "$SECONDS" -lt "$END" ]; do
   if bash "$DIR/check.sh" >/dev/null 2>&1; then break; fi
   sleep 5
 done
