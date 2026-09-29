@@ -1,0 +1,23 @@
+#cloud-config
+users:
+  - name: iac
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - __SSH_KEY__
+package_update: true
+packages:
+  - nginx
+  - curl
+write_files:
+  - path: /etc/nginx/conf.d/lab.conf
+    content: |
+      server {
+        listen __PORT__ default_server;
+        root /var/www/lab;
+      }
+runcmd:
+  - rm -f /etc/nginx/sites-enabled/default
+  - mkdir -p /var/www/lab
+  - echo "__WORD__ $(hostname)" > /var/www/lab/index.html
+  - systemctl restart nginx
